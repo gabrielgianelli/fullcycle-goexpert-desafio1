@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -29,9 +28,25 @@ type AwesomeApiUSDBRL struct {
 	} `json:"USDBRL"`
 }
 
-type CotacaoResponse struct {
-	Cotacao string `json:"cotacao"`
-}
+// type exchangeRates struct {
+// 	ID         int `gorm:"primarykey"`
+// 	Code       string
+// 	Codein     string
+// 	Name       string
+// 	High       float64
+// 	Low        float64
+// 	VarBid     float64
+// 	PctChange  float64
+// 	Bid        float64
+// 	Ask        float64
+// 	Timestamp  int64
+// 	CreateDate time.Time
+// 	gorm.Model
+// }
+
+// type CotacaoResponse struct {
+// 	Cotacao string `json:"cotacao"`
+// }
 
 func main() {
 	http.HandleFunc("/cotacao", cotacaoHandler)
@@ -54,14 +69,7 @@ func cotacaoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-	var cotacao = CotacaoResponse{}
-	cotacao.Cotacao = awesomeApiUSDBRL.Usdbrl.Bid
-	currentDollarExchangeRate, err := strconv.ParseFloat(awesomeApiUSDBRL.Usdbrl.Bid, 64)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	err = save(db, currentDollarExchangeRate)
+	err = save(db, awesomeApiUSDBRL)
 	if err != nil {
 		if strings.Contains(err.Error(), "context deadline exceeded") {
 			w.WriteHeader(http.StatusGatewayTimeout)
@@ -73,7 +81,7 @@ func cotacaoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "Application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(cotacao)
+	json.NewEncoder(w).Encode(awesomeApiUSDBRL)
 }
 
 func dollarExchangeRate() (*AwesomeApiUSDBRL, error) {
@@ -107,18 +115,29 @@ func newDatabaseConnection() (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	const createTable string = `CREATE TABLE IF NOT EXISTS dollar_exchange_rates (
+	const createTable string = `CREATE TABLE IF NOT EXISTS exchange_rates (
 	id INTEGER NOT NULL PRIMARY KEY,
-	date DATETIME NOT NULL,
-	dollar_exchange_rate REAL
+	code TEXT,
+    codein TEXT,
+    name TEXT,
+    high REAL,
+    low REAL,
+    varBid REAL,
+    pctChange REAL,
+    bid REAL,
+    ask REAL,
+    timestamp TEXT,
+    create_date TEXT
 	);`
 	db.Exec(createTable)
 	return db, nil
 }
 
-func save(db *sql.DB, currentDollarExchangeRate float64) error {
-	const insertCommand = `INSERT INTO dollar_exchange_rates(date, dollar_exchange_rate) 
-	VALUES(datetime('now', 'localtime'), ?)`
+func save(db *sql.DB, api *AwesomeApiUSDBRL) error {
+	const insertCommand = `INSERT INTO exchange_rates(
+		code, codein, name, high, low, varBid, pctChange, bid, ask, timestamp, create_date) 
+	VALUES(
+		?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	stmt, err := db.Prepare(insertCommand)
 	if err != nil {
 		return err
@@ -127,7 +146,9 @@ func save(db *sql.DB, currentDollarExchangeRate float64) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 	defer cancel()
-	_, err = stmt.ExecContext(ctx, currentDollarExchangeRate)
+	_, err = stmt.ExecContext(ctx, api.Usdbrl.Code, api.Usdbrl.Codein, api.Usdbrl.Name,
+		api.Usdbrl.High, api.Usdbrl.Low, api.Usdbrl.VarBid, api.Usdbrl.PctChange, api.Usdbrl.Bid,
+		api.Usdbrl.Ask, api.Usdbrl.Timestamp, api.Usdbrl.CreateDate)
 	if err != nil {
 		return err
 	}
