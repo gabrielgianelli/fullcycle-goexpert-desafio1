@@ -28,26 +28,6 @@ type AwesomeApiUSDBRL struct {
 	} `json:"USDBRL"`
 }
 
-// type exchangeRates struct {
-// 	ID         int `gorm:"primarykey"`
-// 	Code       string
-// 	Codein     string
-// 	Name       string
-// 	High       float64
-// 	Low        float64
-// 	VarBid     float64
-// 	PctChange  float64
-// 	Bid        float64
-// 	Ask        float64
-// 	Timestamp  int64
-// 	CreateDate time.Time
-// 	gorm.Model
-// }
-
-// type CotacaoResponse struct {
-// 	Cotacao string `json:"cotacao"`
-// }
-
 func main() {
 	http.HandleFunc("/cotacao", cotacaoHandler)
 	http.ListenAndServe(":8080", nil)
